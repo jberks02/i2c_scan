@@ -1,41 +1,44 @@
-/*
- * Blink for Raspberry Pi Pico
- *
- * @version     1.0.0
- * @author     Justin Berkshire
- * @copyright   2022
- * @licence     MIT
- *
- */
-#include "main.h"
-using namespace std;
+#include <stdio.h>
+#include "pico/stdlib.h"
+#include "hardware/i2c.h"
 
-int main()
-{
-    const uint LED = PICO_DEFAULT_LED_PIN;
+#define PIN_SDA 8
+#define PIN_SCL 9
 
-    gpio_init(LED);
+bool reserved_addr(uint8_t addr) {
+    return (addr & 0x78) == 0 || (addr & 0x78) == 0x78;
+}
 
-    gpio_set_dir(LED, GPIO_OUT);
-
+int main() {
     stdio_init_all();
 
-    int a = 4;
+    // This example will use I2C0 on GPIO4 (SDA) and GPIO5 (SCL) running at 100kHz
+    i2c_init(i2c0, 100 * 1000);
+    gpio_set_function(PIN_SDA, GPIO_FUNC_I2C);
+    gpio_set_function(PIN_SCL, GPIO_FUNC_I2C);
+    gpio_pull_up(PIN_SDA);
+    gpio_pull_up(PIN_SCL);
 
-    int b = 8;
+    while (true) {
+        printf("\nI2C Bus Scan for Si7021 and VCNL4000\n");
+        printf("   0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F\n");
 
-    int c = a + b; 
+        for (int addr = 0; addr < (1 << 7); ++addr) {
+            if (addr % 16 == 0) {
+                printf("%02x ", addr);
+            }
 
-    cout << c << '\n';
+            int ret;
+            uint8_t rxdata;
+            if (reserved_addr(addr))
+                ret = PICO_ERROR_GENERIC;
+            else
+                ret = i2c_read_blocking(i2c0, addr, &rxdata, 1, false);
 
-    while (true)
-    {
-        cout << "Deadly Virus";
-        gpio_put(LED, 1);
-        sleep_ms(a * 100);
-        gpio_put(LED, 0);
-        sleep_ms(b * 100);
+            printf(ret < 0 ? "." : "@");
+            printf(addr % 16 == 15 ? "\n" : "  ");
+        }
+
+        sleep_ms(2000);
     }
-
-    return 0;
 }
